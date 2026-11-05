@@ -1,7 +1,7 @@
-
 import os
 import re
 import json
+from pathlib import Path
 from urllib.parse import urlparse, parse_qs, quote
 from urllib.request import urlopen
 
@@ -11,17 +11,19 @@ from agent.transcript import TranscriptAgent
 from agent.document import generate_word_document
 
 
-# CONFIGURACION
-OUTPUT = "/mnt/c/Users/DANIEL/Documents/Video_transcripts"
+# CARPETA DE SALIDA
+OUTPUT_FOLDER = "output"
+os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 
 # IDENTIFICAR VIDEO
 def extract_video_id(url):
 
     parsed = urlparse(url.strip())
-    host = parsed.netloc.lower()
+    host = parsed.netloc.lower().split(":")[0]
 
-    if host.endswith("youtube.com") or host.endswith("youtube-nocookie.com"):
+    if host in ("youtube.com", "www.youtube.com", "m.youtube.com",
+                "youtube-nocookie.com", "www.youtube-nocookie.com"):
 
         video_id = parse_qs(parsed.query).get("v", [None])[0]
 
@@ -32,7 +34,7 @@ def extract_video_id(url):
             )
             video_id = match.group(1) if match else None
 
-    elif host.endswith("youtu.be"):
+    elif host in ("youtu.be", "www.youtu.be"):
 
         video_id = parsed.path.strip("/").split("/")[0]
 
@@ -64,13 +66,15 @@ def get_video_title(video_id):
     return data["title"]
 
 
-# INTERFAZ
+# CONFIGURACION DE LA INTERFAZ
 st.set_page_config(
     page_title="YouTube Transcript Agent",
     page_icon="🎬",
     layout="centered"
 )
 
+
+# INTERFAZ
 st.title("🎬 YouTube Transcript Agent")
 
 st.write(
@@ -100,36 +104,34 @@ if st.button(
 
         try:
 
-            # 1. Identificar video individual
+            # 1. IDENTIFICAR VIDEO
             video_id = extract_video_id(url)
-
-            os.makedirs(OUTPUT, exist_ok=True)
 
             st.info(f"Video identificado: {video_id}")
 
-            # 2. Obtener titulo real de YouTube
+            # 2. OBTENER TITULO
             with st.spinner("Obteniendo título del video..."):
 
                 title = get_video_title(video_id)
 
             st.write(f"**Título:** {title}")
 
-            # 3. Extraer transcripcion
+            # 3. EXTRAER TRANSCRIPCION
             with st.spinner("Obteniendo transcripción de YouTube..."):
 
                 agent = TranscriptAgent()
                 result = agent.extract(video_id)
 
-            # 4. Generar documento Word
+            # 4. GENERAR DOCUMENTO WORD
             with st.spinner("Generando documento Word..."):
 
                 docx_path = generate_word_document(
                     title,
                     result,
-                    OUTPUT
+                    OUTPUT_FOLDER
                 )
 
-            # 5. Mostrar resultado
+            # 5. MOSTRAR RESULTADO
             st.success("¡Transcripción generada correctamente!")
 
             st.write(f"**Título:** {title}")
@@ -137,19 +139,17 @@ if st.button(
             st.write(f"**Fragmentos:** {result['fragments']}")
             st.write(f"**Caracteres:** {result['characters']}")
 
-            st.write("**Documento guardado en:**")
-            st.code(docx_path)
-
-            # 6. Descargar documento
+            # 6. BOTON DE DESCARGA
             with open(docx_path, "rb") as file:
+                docx_bytes = file.read()
 
-                st.download_button(
-                    label="⬇️ Descargar documento Word",
-                    data=file,
-                    file_name=os.path.basename(docx_path),
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    use_container_width=True
-                )
+            st.download_button(
+                label="⬇️ Descargar documento Word",
+                data=docx_bytes,
+                file_name=Path(docx_path).name,
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                use_container_width=True
+            )
 
         except Exception as error:
 
@@ -159,6 +159,7 @@ if st.button(
             )
 
 
+# PIE DE PAGINA
 st.divider()
 
 st.caption(
@@ -167,5 +168,5 @@ st.caption(
 )
 
 st.caption(
-    "Destino: C:/Users/DANIEL/Documents/Video_transcripts"
+    "Genera y descarga tus transcripciones en formato Word."
 )
